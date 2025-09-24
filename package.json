@@ -1,0 +1,22 @@
+{
+  "name": "prog_restoran",
+  "version": "1.0.0",
+  "description": "��#\u0000 \u0000P\u0000R\u0000O\u0000G\u0000_\u0000R\u0000E\u0000S\u0000T\u0000O\u0000R\u0000A\u0000N\u0000\r\u0000 \u0000",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
