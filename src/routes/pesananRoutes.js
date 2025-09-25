@@ -122,4 +122,44 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+// HITUNG TOTAL PESANAN
+router.get("/:id/total", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT SUM(subtotal) as total 
+       FROM detail_pesanan 
+       WHERE id_pesanan = $1`,
+      [id]
+    );
+
+    const total = result.rows[0].total || 0;
+    res.json({ id_pesanan: id, total });
+  } catch (err) {
+    console.error("❌ DB Error:", err);
+    res.status(500).json({ error: "Gagal menghitung total pesanan" });
+  }
+});
+
+// HITUNG TOTAL PESANAN
+router.get("/:id/total", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT SUM(subtotal) as total 
+       FROM detail_pesanan 
+       WHERE id_pesanan = $1`,
+      [id]
+    );
+
+    const total = result.rows[0].total || 0;
+    res.json({ id_pesanan: id, total });
+  } catch (err) {
+    console.error("❌ DB Error:", err);
+    res.status(500).json({ error: "Gagal menghitung total pesanan" });
+  }
+});
+
 module.exports = router;

@@ -39,6 +39,17 @@ router.post("/", async (req, res) => {
   }
 });
 
+// READ - Ambil semua detail pesanan
+router.get("/", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM detail_pesanan ORDER BY id_detail ASC");
+    res.json(result.rows);
+  } catch (err) {
+    console.error("❌ DB Error:", err);
+    res.status(500).json({ error: "Gagal mengambil detail pesanan" });
+  }
+});
+
 // READ - Ambil semua detail pesanan berdasarkan id_pesanan
 router.get("/:id_pesanan", async (req, res) => {
   try {
@@ -57,6 +68,45 @@ router.get("/:id_pesanan", async (req, res) => {
   } catch (err) {
     console.error("❌ DB Error:", err);
     res.status(500).json({ error: "Gagal mengambil detail pesanan" });
+  }
+});
+
+// UPDATE - Ubah qty detail pesanan
+router.put("/:id_detail", async (req, res) => {
+  try {
+    const { id_detail } = req.params;
+    const { qty } = req.body;
+
+    if (!qty) {
+      return res.status(400).json({ error: "qty wajib diisi" });
+    }
+
+    // Ambil id_produk dulu
+    const detail = await pool.query(
+      "SELECT id_produk FROM detail_pesanan WHERE id_detail = $1",
+      [id_detail]
+    );
+
+    if (detail.rows.length === 0) {
+      return res.status(404).json({ message: "Detail pesanan tidak ditemukan" });
+    }
+
+    const id_produk = detail.rows[0].id_produk;
+
+    // Ambil harga produk
+    const produk = await pool.query("SELECT harga FROM produk WHERE id_produk = $1", [id_produk]);
+    const subtotal = produk.rows[0].harga * qty;
+
+    // Update
+    const result = await pool.query(
+      "UPDATE detail_pesanan SET qty = $1, subtotal = $2 WHERE id_detail = $3 RETURNING *",
+      [qty, subtotal, id_detail]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("❌ DB Error:", err);
+    res.status(500).json({ error: "Gagal mengubah detail pesanan" });
   }
 });
 

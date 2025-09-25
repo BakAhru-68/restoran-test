@@ -18,7 +18,7 @@ pool
   .connect()
   .then((client) => {
     console.log("✅ Koneksi database berhasil");
-    client.release(); // penting! kembalikan koneksi ke pool
+    client.release(); 
   })
   .catch((err) => {
     console.error("❌ Koneksi database gagal:", err.message);

@@ -1,6 +1,17 @@
 require("dotenv").config();
 const express = require("express");
 const app = express();
+const cors = require("cors");
+
+
+// Middleware CORS
+app.use(
+  cors({
+    origin: "http://localhost:5173", // izinkan hanya frontend Vite
+    methods: ["GET", "POST", "PUT", "DELETE"], // method yang diizinkan
+    allowedHeaders: ["Content-Type", "Authorization"], // header yang diizinkan
+  })
+);
 
 // Middleware untuk parsing JSON
 app.use(express.json());
@@ -16,6 +27,7 @@ const pesananRoutes = require("./src/routes/pesananRoutes");
 const detailPesananRoutes = require("./src/routes/detailPesananRoutes");
 const transaksiRoutes = require("./src/routes/transaksiRoutes");
 const laporanRoutes = require("./src/routes/laporanRoutes");
+const authRoutes = require("./src/routes/authRoutes");
 
 // Prefix semua route pakai /api/...
 app.use("/api/kategori", kategoriRoutes);
@@ -25,6 +37,7 @@ app.use("/api/pesanan", pesananRoutes);
 app.use("/api/detail-pesanan", detailPesananRoutes);
 app.use("/api/transaksi", transaksiRoutes);
 app.use("/api/laporan", laporanRoutes);
+app.use("/api/auth", authRoutes);
 
 // Route tes sederhana
 app.get("/", (req, res) => {
