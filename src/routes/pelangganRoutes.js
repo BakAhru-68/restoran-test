@@ -83,4 +83,36 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// UPDATE STATUS - ubah status pelanggan
+router.put('/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { status } = req.body;
+
+    // Normalisasi input
+    if (typeof status === "boolean") {
+      status = status ? 1 : 0;        // boolean → angka
+    } else if (status === "Aktif") {
+      status = 1;
+    } else if (status === "Non-aktif") {
+      status = 0;
+    }
+
+    const result = await pool.query(
+      'UPDATE pelanggan SET status = $1 WHERE id_pelanggan = $2 RETURNING *',
+      [status, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Pelanggan tidak ditemukan' });
+    }
+
+    res.json({ message: 'Status berhasil diperbarui', data: result.rows[0] });
+  } catch (err) {
+    console.error("❌ DB Error (UPDATE STATUS):", err);
+    res.status(500).json({ error: 'Gagal mengubah status pelanggan' });
+  }
+});
+
+
 module.exports = router;

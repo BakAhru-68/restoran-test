@@ -15,6 +15,15 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'nama_kategori wajib diisi' });
     }
 
+    // ✅ Cek apakah nama kategori sudah ada (case-insensitive)
+    const check = await pool.query(
+      'SELECT * FROM kategori WHERE LOWER(nama_kategori) = LOWER($1)',
+      [nama_kategori]
+    );
+    if (check.rows.length > 0) {
+      return res.status(400).json({ error: 'Kategori sudah ada!' });
+    }
+
     const result = await pool.query(
       'INSERT INTO kategori (nama_kategori) VALUES ($1) RETURNING *',
       [nama_kategori]
@@ -54,6 +63,15 @@ router.put('/:id', async (req, res) => {
 
     if (!nama_kategori) {
       return res.status(400).json({ error: 'nama_kategori wajib diisi' });
+    }
+
+    // ✅ Cek apakah nama kategori sudah dipakai oleh kategori lain
+    const check = await pool.query(
+      'SELECT * FROM kategori WHERE LOWER(nama_kategori) = LOWER($1) AND id_kategori != $2',
+      [nama_kategori, id]
+    );
+    if (check.rows.length > 0) {
+      return res.status(400).json({ error: 'Kategori dengan nama ini sudah ada!' });
     }
 
     const result = await pool.query(

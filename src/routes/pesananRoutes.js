@@ -2,64 +2,116 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../config/db");
 
-// CREATE - Tambah pesanan baru
+// CREATE – Buat pesanan + detail
 router.post("/", async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { id_pelanggan } = req.body;
+    const { id_pelanggan, catatan, items } = req.body;
 
-    // Validasi: id_pelanggan wajib diisi
-    if (!id_pelanggan) {
-      return res.status(400).json({ error: "id_pelanggan wajib diisi" });
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: "Items wajib diisi" });
     }
 
-    // Cek apakah pelanggan ada di tabel pelanggan
-    const checkPelanggan = await pool.query(
-      "SELECT * FROM pelanggan WHERE id_pelanggan = $1",
-      [id_pelanggan]
-    );
+    await client.query("BEGIN");
 
-    if (checkPelanggan.rows.length === 0) {
-      return res.status(404).json({ error: "Pelanggan tidak ditemukan" });
-    }
-
-    // Insert pesanan
-    const result = await pool.query(
-      `INSERT INTO pesanan (id_pelanggan, status) 
-       VALUES ($1, 'pending') 
+    // 1. Insert pesanan
+    const pesananResult = await client.query(
+      `INSERT INTO pesanan (id_pelanggan, tanggal, status, catatan)
+       VALUES ($1, NOW(), 'pending', $2)
        RETURNING *`,
-      [id_pelanggan]
+      [id_pelanggan || null, catatan || null]
+    );
+    const pesanan = pesananResult.rows[0];
+
+    // 2. Insert detail pesanan
+    for (const item of items) {
+      const produk = await client.query(
+        "SELECT harga, stok FROM produk WHERE id_produk = $1",
+        [item.id_produk]
+      );
+
+      if (produk.rows.length === 0) {
+        throw new Error(`Produk ID ${item.id_produk} tidak ditemukan`);
+      }
+
+      const { harga, stok } = produk.rows[0];
+      if (stok < item.qty) {
+        throw new Error(`Stok produk ID ${item.id_produk} tidak mencukupi`);
+      }
+
+      const subtotal = harga * item.qty;
+
+      // Simpan ke detail_pesanan
+      await client.query(
+        `INSERT INTO detail_pesanan (id_pesanan, id_produk, qty, subtotal)
+         VALUES ($1, $2, $3, $4)`,
+        [pesanan.id_pesanan, item.id_produk, item.qty, subtotal]
+      );
+
+      // Update stok produk
+      await client.query(
+        "UPDATE produk SET stok = stok - $1 WHERE id_produk = $2",
+        [item.qty, item.id_produk]
+      );
+    }
+
+    // 3. Ambil ulang detail pesanan lengkap
+    const detailResult = await client.query(
+      `SELECT dp.id_produk, p.nama_produk, p.harga, dp.qty, dp.subtotal
+       FROM detail_pesanan dp
+       JOIN produk p ON dp.id_produk = p.id_produk
+       WHERE dp.id_pesanan = $1`,
+      [pesanan.id_pesanan]
     );
 
-    res.status(201).json(result.rows[0]);
+    const total = detailResult.rows.reduce(
+      (acc, cur) => acc + Number(cur.subtotal),
+      0
+    );
+
+    await client.query("COMMIT");
+
+    res.status(201).json({
+      message: "Pesanan berhasil dibuat",
+      pesanan: {
+        ...pesanan,
+        items: detailResult.rows,
+        total: total,
+      },
+    });
   } catch (err) {
-    console.error("❌ DB Error:", err);
-    res.status(500).json({ error: "Gagal menambah pesanan" });
+    await client.query("ROLLBACK");
+    console.error("❌ DB Error (POST pesanan):", err.message);
+    res.status(500).json({ error: err.message || "Gagal membuat pesanan" });
+  } finally {
+    client.release();
   }
 });
 
-// READ - Ambil semua pesanan (include data pelanggan)
+// READ – Semua pesanan
 router.get("/", async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT p.id_pesanan, p.tanggal, p.status,
-             pl.id_pelanggan, pl.nama, pl.no_hp
-      FROM pesanan p
-      LEFT JOIN pelanggan pl ON p.id_pelanggan = pl.id_pelanggan
-      ORDER BY p.id_pesanan ASC
-    `);
+    const result = await pool.query(
+      `SELECT p.id_pesanan, p.tanggal, p.status, p.catatan,
+              pl.id_pelanggan, pl.nama, pl.no_hp
+       FROM pesanan p
+       LEFT JOIN pelanggan pl ON p.id_pelanggan = pl.id_pelanggan
+       ORDER BY p.id_pesanan ASC`
+    );
     res.json(result.rows);
   } catch (err) {
-    console.error("❌ DB Error:", err);
+    console.error("❌ DB Error (GET pesanan):", err);
     res.status(500).json({ error: "Gagal mengambil pesanan" });
   }
 });
 
-// READ - Ambil pesanan berdasarkan ID (include data pelanggan)
+// READ – Pesanan by ID + detail
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
-      `SELECT p.id_pesanan, p.tanggal, p.status,
+
+    const pesananResult = await pool.query(
+      `SELECT p.id_pesanan, p.tanggal, p.status, p.catatan,
               pl.id_pelanggan, pl.nama, pl.no_hp
        FROM pesanan p
        LEFT JOIN pelanggan pl ON p.id_pelanggan = pl.id_pelanggan
@@ -67,98 +119,81 @@ router.get("/:id", async (req, res) => {
       [id]
     );
 
-    if (result.rows.length === 0) {
+    if (pesananResult.rows.length === 0) {
       return res.status(404).json({ message: "Pesanan tidak ditemukan" });
     }
-    res.json(result.rows[0]);
+
+    const pesanan = pesananResult.rows[0];
+
+    // Ambil detail
+    const detailResult = await pool.query(
+      `SELECT dp.id_produk, p.nama_produk, p.harga, dp.qty, dp.subtotal
+       FROM detail_pesanan dp
+       JOIN produk p ON dp.id_produk = p.id_produk
+       WHERE dp.id_pesanan = $1`,
+      [id]
+    );
+
+    const total = detailResult.rows.reduce(
+      (acc, cur) => acc + Number(cur.subtotal),
+      0
+    );
+
+    res.json({ ...pesanan, items: detailResult.rows, total });
   } catch (err) {
-    console.error("❌ DB Error:", err);
+    console.error("❌ DB Error (GET pesanan by ID):", err);
     res.status(500).json({ error: "Gagal mengambil pesanan" });
   }
 });
 
-// UPDATE - Ubah status pesanan
+// UPDATE – Ubah status atau catatan
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
-
-    if (!status) {
-      return res.status(400).json({ error: "Status wajib diisi" });
-    }
+    const { status, catatan } = req.body;
 
     const result = await pool.query(
-      "UPDATE pesanan SET status = $1 WHERE id_pesanan = $2 RETURNING *",
-      [status, id]
+      `UPDATE pesanan
+       SET status = COALESCE($1, status),
+           catatan = COALESCE($2, catatan)
+       WHERE id_pesanan = $3
+       RETURNING *`,
+      [status || null, catatan || null, id]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Pesanan tidak ditemukan" });
     }
+
     res.json(result.rows[0]);
   } catch (err) {
-    console.error("❌ DB Error:", err);
+    console.error("❌ DB Error (PUT pesanan):", err);
     res.status(500).json({ error: "Gagal mengubah pesanan" });
   }
 });
 
-// DELETE - Hapus pesanan
+// DELETE – Hapus pesanan
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
+    await pool.query("BEGIN");
+    await pool.query("DELETE FROM detail_pesanan WHERE id_pesanan = $1", [id]);
     const result = await pool.query(
       "DELETE FROM pesanan WHERE id_pesanan = $1 RETURNING *",
       [id]
     );
+    await pool.query("COMMIT");
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Pesanan tidak ditemukan" });
     }
+
     res.json({ message: "Pesanan berhasil dihapus" });
   } catch (err) {
-    console.error("❌ DB Error:", err);
+    await pool.query("ROLLBACK");
+    console.error("❌ DB Error (DELETE pesanan):", err);
     res.status(500).json({ error: "Gagal menghapus pesanan" });
-  }
-});
-
-// HITUNG TOTAL PESANAN
-router.get("/:id/total", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await pool.query(
-      `SELECT SUM(subtotal) as total 
-       FROM detail_pesanan 
-       WHERE id_pesanan = $1`,
-      [id]
-    );
-
-    const total = result.rows[0].total || 0;
-    res.json({ id_pesanan: id, total });
-  } catch (err) {
-    console.error("❌ DB Error:", err);
-    res.status(500).json({ error: "Gagal menghitung total pesanan" });
-  }
-});
-
-// HITUNG TOTAL PESANAN
-router.get("/:id/total", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await pool.query(
-      `SELECT SUM(subtotal) as total 
-       FROM detail_pesanan 
-       WHERE id_pesanan = $1`,
-      [id]
-    );
-
-    const total = result.rows[0].total || 0;
-    res.json({ id_pesanan: id, total });
-  } catch (err) {
-    console.error("❌ DB Error:", err);
-    res.status(500).json({ error: "Gagal menghitung total pesanan" });
   }
 });
 

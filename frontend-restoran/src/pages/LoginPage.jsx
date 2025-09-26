@@ -1,75 +1,68 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
-export default function Login() {
+export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-
     try {
-      const res = await fetch("http://localhost:3000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+      const res = await axios.post("http://localhost:3000/api/auth/login", {
+        username,
+        password,
       });
 
-      const data = await res.json();
+      // Simpan token dan role di localStorage
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("role", res.data.user.role);
 
-      if (!res.ok) {
-        throw new Error(data.error || "Login gagal");
-      }
-
-      // simpan token & role
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.role);
-
-      // redirect sesuai role
-      if (data.role === "admin") {
+      // Redirect sesuai role
+      if (res.data.user.role === "admin") {
         navigate("/admin/dashboard");
       } else {
         navigate("/dashboard");
       }
     } catch (err) {
-      setError(err.message);
+      console.error("Login gagal:", err);
+      setError("Username atau password salah");
     }
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-white p-6 rounded-lg shadow-md w-96"
-    >
-      <h2 className="text-2xl font-bold mb-4">Login</h2>
-      {error && <p className="text-red-500 mb-2">{error}</p>}
-
-      <input
-        type="text"
-        placeholder="Username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        className="w-full border rounded px-3 py-2 mb-3"
-        required
-      />
-
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="w-full border rounded px-3 py-2 mb-3"
-        required
-      />
-
-      <button
-        type="submit"
-        className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600"
-      >
-        Login
-      </button>
-    </form>
+    <div className="d-flex vh-100 justify-content-center align-items-center">
+      <div className="card p-4" style={{ width: "400px" }}>
+        <h3 className="mb-3">Login</h3>
+        {error && <div className="alert alert-danger">{error}</div>}
+        <form onSubmit={handleLogin}>
+          <div className="mb-3">
+            <label className="form-label">Username</label>
+            <input
+              type="text"
+              className="form-control"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+          </div>
+          <div className="mb-3">
+            <label className="form-label">Password</label>
+            <input
+              type="password"
+              className="form-control"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <button type="submit" className="btn btn-dark w-100">
+            Login
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }

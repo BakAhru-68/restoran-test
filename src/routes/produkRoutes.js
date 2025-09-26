@@ -1,63 +1,47 @@
+// routes/produk.js
 const express = require("express");
 const router = express.Router();
 const pool = require("../config/db");
-const verifyToken = require("../middleware/authMiddleware");
 
-// CREATE - tambah produk baru
-router.post("/", async (req, res) => {
-  try {
-    const { nama_produk, harga, stok, id_kategori } = req.body;
-
-    const result = await pool.query(
-      "INSERT INTO produk (nama_produk, harga, stok, id_kategori) VALUES ($1, $2, $3, $4) RETURNING *",
-      [nama_produk, harga, stok, id_kategori]
-    );
-
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Gagal menambah produk" });
-  }
-});
-
-// READ - ambil semua produk
+// ✅ GET semua produk (dengan JOIN kategori agar nama_kategori ikut muncul)
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT p.id_produk, p.nama_produk, p.harga, p.stok, k.nama_kategori
+      `SELECT p.id_produk,
+              p.nama_produk,
+              p.harga,
+              p.stok,
+              p.id_kategori,
+              k.nama_kategori
        FROM produk p
-       JOIN kategori k ON p.id_kategori = k.id_kategori
+       LEFT JOIN kategori k ON p.id_kategori = k.id_kategori
        ORDER BY p.id_produk ASC`
     );
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Gagal mengambil produk" });
+    console.error("❌ DB Error (GET produk):", err);
+    res.status(500).json({ error: "Gagal mengambil data produk" });
   }
 });
 
-// READ - ambil produk berdasarkan kategori
-router.get("/kategori/:id", async (req, res) => {
+// ✅ POST tambah produk baru
+router.post("/", async (req, res) => {
   try {
-    const { id } = req.params;
+    const { nama_produk, harga, stok, id_kategori } = req.body;
     const result = await pool.query(
-      `SELECT p.id_produk, p.nama_produk, p.harga, p.stok, k.nama_kategori
-       FROM produk p
-       JOIN kategori k ON p.id_kategori = k.id_kategori
-       WHERE p.id_kategori = $1
-       ORDER BY p.id_produk ASC`,
-      [id]
+      `INSERT INTO produk (nama_produk, harga, stok, id_kategori) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING *`,
+      [nama_produk, harga, stok, id_kategori]
     );
-    res.json(result.rows);
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error(err);
-    res
-      .status(500)
-      .json({ error: "Gagal mengambil produk berdasarkan kategori" });
+    console.error("❌ DB Error (POST produk):", err);
+    res.status(500).json({ error: "Gagal menambah produk" });
   }
 });
 
-// UPDATE - ubah produk
+// ✅ PUT update produk
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -65,8 +49,9 @@ router.put("/:id", async (req, res) => {
 
     const result = await pool.query(
       `UPDATE produk 
-       SET nama_produk=$1, harga=$2, stok=$3, id_kategori=$4
-       WHERE id_produk=$5 RETURNING *`,
+       SET nama_produk = $1, harga = $2, stok = $3, id_kategori = $4 
+       WHERE id_produk = $5 
+       RETURNING *`,
       [nama_produk, harga, stok, id_kategori, id]
     );
 
@@ -74,20 +59,20 @@ router.put("/:id", async (req, res) => {
       return res.status(404).json({ message: "Produk tidak ditemukan" });
     }
 
-    res.json(result.rows[0]);
+    res.json({ message: "Produk berhasil diupdate", data: result.rows[0] });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Gagal mengubah produk" });
+    console.error("❌ DB Error (PUT produk):", err);
+    res.status(500).json({ error: "Gagal update produk" });
   }
 });
 
-// DELETE - hapus produk
+// ✅ DELETE hapus produk
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
     const result = await pool.query(
-      "DELETE FROM produk WHERE id_produk=$1 RETURNING *",
+      "DELETE FROM produk WHERE id_produk = $1 RETURNING *",
       [id]
     );
 
@@ -97,7 +82,7 @@ router.delete("/:id", async (req, res) => {
 
     res.json({ message: "Produk berhasil dihapus" });
   } catch (err) {
-    console.error(err);
+    console.error("❌ DB Error (DELETE produk):", err);
     res.status(500).json({ error: "Gagal menghapus produk" });
   }
 });

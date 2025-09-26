@@ -1,64 +1,110 @@
 import { useEffect, useState } from "react";
+import { FaUser, FaUsers, FaBox, FaExchangeAlt, FaSignOutAlt } from "react-icons/fa";
+import { useNavigate, Link } from "react-router-dom"; // ✅ pakai Link
+import DataTable from "react-data-table-component";
+import axios from "axios";
 
 export default function AdminDashboard() {
-  const [pelanggan, setPelanggan] = useState([]);
-
-  // Helper untuk kapitalisasi nama
-  const capitalizeWords = (str) => {
-    if (!str) return "";
-    return str
-      .toLowerCase()
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-  };
+  const navigate = useNavigate();
+  const [admins, setAdmins] = useState([]);
 
   useEffect(() => {
-    const fetchPelanggan = async () => {
-      const token = localStorage.getItem("token");
-
+    const fetchAdmins = async () => {
       try {
-        const res = await fetch("http://localhost:3000/api/pelanggan", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await axios.get("http://localhost:3000/api/admins");
+        console.log("API Admins:", res.data);
 
-        if (!res.ok) throw new Error("Gagal mengambil data pelanggan");
+        // kalau backend return { data: [...] }
+        const data = res.data.data || res.data;
 
-        const data = await res.json();
-        console.log("Response pelanggan:", data);
-        setPelanggan(data);
+        // tambahkan field "aktif" biar tabel tidak error
+        const mapped = data.map((a) => ({
+          ...a,
+          aktif: true,
+        }));
+
+        setAdmins(mapped);
       } catch (err) {
-        console.error(err);
+        console.error("Gagal fetch admins:", err);
       }
     };
 
-    fetchPelanggan();
+    fetchAdmins();
   }, []);
 
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Dashboard Admin 👑</h1>
-      <h2 className="text-xl mb-2">Daftar Pelanggan:</h2>
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate("/login");
+  };
 
-      <table className="w-full border-collapse border border-gray-300">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="border border-gray-300 px-4 py-2">ID</th>
-            <th className="border border-gray-300 px-4 py-2">Nama</th>
-            <th className="border border-gray-300 px-4 py-2">Email</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pelanggan.map((p, index) => (
-            <tr
-              key={p.id_pelanggan ?? index}
-              className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
-            >
-              <td className="border border-gray-300 px-4 py-2">{p.id_pelanggan}</td>
-              <td className="border border-gray-300 px-4 py-2">{capitalizeWords(p.nama)}</td>
-              <td className="border border-gray-300 px-4 py-2">{p.email}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+  const columns = [
+    { name: "ID Admin", selector: (row) => row.id_admin, sortable: true, center: true },
+    { name: "Nama", selector: (row) => row.nama, sortable: true, center: true },
+    {
+      name: "Status Akun",
+      cell: (row) =>
+        row.aktif ? (
+          <span className="badge bg-primary">Aktif</span>
+        ) : (
+          <span className="badge bg-secondary">Non-aktif</span>
+        ),
+      sortable: true,
+      center: true,
+    },
+  ];
+
+  return (
+    <div className="d-flex vh-100">
+      {/* Sidebar */}
+      <div className="bg-dark text-white p-3 d-flex flex-column" style={{ width: "250px" }}>
+        <h4 className="mb-4">Admin Panel</h4>
+        <ul className="nav flex-column flex-grow-1">
+          <li className="nav-item mb-2">
+            <Link to="/admin/dashboard" className="nav-link text-white">
+              <FaUser className="me-2" /> Admin
+            </Link>
+          </li>
+          <li className="nav-item mb-2">
+            <Link to="/users" className="nav-link text-white">
+              <FaUsers className="me-2" /> Users
+            </Link>
+          </li>
+          <li className="nav-item mb-2">
+            <Link to="/products" className="nav-link text-white">
+              <FaBox className="me-2" /> Stok Produk
+            </Link>
+          </li>
+          <li className="nav-item mb-2">
+            <Link to="/transactions" className="nav-link text-white">
+              <FaExchangeAlt className="me-2" /> Detail Transaksi
+            </Link>
+          </li>
+        </ul>
+        <button onClick={handleLogout} className="btn btn-danger mt-auto w-100">
+          <FaSignOutAlt className="me-2" /> Logout
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-grow-1 p-4">
+        <h2 className="mb-3">Daftar Akun Admin</h2>
+        <DataTable
+          columns={columns}
+          data={admins}
+          pagination
+          highlightOnHover
+          striped
+          responsive
+          customStyles={{
+            headCells: {
+              style: { fontWeight: "bold", fontSize: "14px", textAlign: "center", justifyContent: "center" },
+            },
+            cells: {
+              style: { fontSize: "13px", textAlign: "center", justifyContent: "center" },
+            },
+          }}
+        />
+      </div>
     </div>
   );
 }
