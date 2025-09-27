@@ -10,25 +10,39 @@ export default function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+
+    // Pastikan input tidak kosong
+    if (!username || !password) {
+      setError("Username dan password harus diisi");
+      return;
+    }
+
     try {
-      const res = await axios.post("http://localhost:3000/api/auth/login", {
-        username,
-        password,
-      });
+      const res = await axios.post(
+        "http://localhost:3000/api/auth/login",
+        { username, password },
+        { headers: { "Content-Type": "application/json" } }
+      );
 
       // Simpan token dan role di localStorage
       localStorage.setItem("token", res.data.token);
-      localStorage.setItem("role", res.data.user.role);
+      localStorage.setItem("role", res.data.role);
 
       // Redirect sesuai role
-      if (res.data.user.role === "admin") {
+      if (res.data.role === "admin") {
         navigate("/admin/dashboard");
       } else {
         navigate("/dashboard");
       }
     } catch (err) {
-      console.error("Login gagal:", err);
-      setError("Username atau password salah");
+      console.error("Login gagal:", err.response || err.message);
+
+      // Ambil pesan error dari server jika ada
+      if (err.response && err.response.data) {
+        setError(err.response.data.message || "Username atau password salah");
+      } else {
+        setError("Terjadi kesalahan jaringan");
+      }
     }
   };
 
